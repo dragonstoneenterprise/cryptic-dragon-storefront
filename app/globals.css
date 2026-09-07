@@ -1,0 +1,55 @@
+@import "tailwindcss";
+@config "../tailwind.config.ts";
+
+:root {
+  --background: #fdfcfa; /* base-0 */
+  --foreground: #5c544a; /* ink-600 */
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-archivo), Archivo, system-ui, sans-serif;
+}
+
+/* Prices and numeric columns use tabular figures so digits don't jiggle
+   width as they change. Tailwind ships a `tabular-nums` utility already
+   (font-variant-numeric: tabular-nums) — this class is a semantic alias
+   for it so price-block markup can say what it means. */
+.tabular-nums,
+.price-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Horizontally-scrolling chip rows (shelf chips, filter chips) bleed
+   into the gutter and hide their scrollbar per README "Filter chip". */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Scroll lock while the mobile cart drawer is open. Scoped below lg on
+   purpose: the drawer is `lg:hidden`, so locking a desktop viewport that
+   is showing no drawer would strand the page. */
+@media (max-width: 1023.98px) {
+  body.drawer-open {
+    overflow: hidden;
+  }
+}
+
+/* Visually-hidden but screen-reader-accessible text, used for the "was"
+   prefix on strikethrough compare-at prices. */
+.sr-only-cd {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
