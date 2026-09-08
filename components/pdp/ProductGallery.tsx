@@ -30,16 +30,12 @@ import { isSoldOut, pickBadge, productPhotos, type Product, type ProductPhoto } 
  * `hasRail(product)` lets the page pick its grid template to match: the
  * README's `96px 1fr 400px` when there is a rail to put in the 96px, and
  * `1fr 400px` when there is not, rather than reserving a permanently empty
- * column.
+ * column. It lives in `lib/products` rather than here because the PDP is a
+ * Server Component and this module is a client one.
  *
  * The single shot is rendered with the same three treatments as the plate,
  * so the PDP and the grid agree about what a knockout is.
  */
-
-/** Whether this product has enough photography for the thumbnail rail. */
-export function hasRail(product: Product): boolean {
-  return productPhotos(product).length > 1;
-}
 
 function PhotoLayer({
   photo,

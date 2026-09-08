@@ -57,7 +57,7 @@ export function ConfirmationView() {
 
       <section className="overflow-hidden border border-base-200 bg-white">
         <div className="flex items-baseline justify-between gap-4 border-b border-base-200 bg-base-50 px-4 py-2.5">
-          <h2 className="text-label font-medium uppercase text-ink-400">
+          <h2 className="text-label font-medium uppercase text-ink-600">
             {order.totals.count} item{order.totals.count === 1 ? "" : "s"}
           </h2>
           <span className="text-[15px] font-semibold leading-5 tabular-nums text-ink-900">
@@ -86,11 +86,11 @@ export function ConfirmationView() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-label font-medium uppercase text-ink-400">Arriving</h2>
+          <h2 className="text-label font-medium uppercase text-ink-600">Arriving</h2>
           <p className="text-body text-ink-900">{order.arriving}</p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-label font-medium uppercase text-ink-400">Shipping to</h2>
+          <h2 className="text-label font-medium uppercase text-ink-600">Shipping to</h2>
           <address className="not-italic text-body text-ink-900">
             {order.address.name}
             <br />

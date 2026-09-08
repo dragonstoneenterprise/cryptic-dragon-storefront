@@ -116,9 +116,16 @@ export function SiteHeader({
             </button>
           )}
           {mobileActions.includes("wishlist") && (
-            <Link href="/category/all" aria-label="Wishlist" className={iconTargetClass}>
+            <button
+              type="button"
+              aria-disabled="true"
+              title="The wishlist screen lands in a later phase"
+              onClick={(e) => e.preventDefault()}
+              className={cn(iconTargetClass, "cursor-not-allowed text-base-300 hover:bg-transparent")}
+            >
+              <span className="sr-only">Wishlist — not available yet</span>
               <HeartIcon size={19} />
-            </Link>
+            </button>
           )}
           {mobileActions.includes("cart") && <CartButton />}
           {mobileActions.length === 0 && <span className="w-10" aria-hidden="true" />}
@@ -177,9 +184,19 @@ export function SiteHeader({
 
         <div className="flex items-center gap-2">
           <SearchField defaultValue={searchValue} size="compact" className="w-[240px] xl:w-[280px]" />
-          <Link href="/category/all" aria-label="Account" className={iconTargetClass}>
+          {/* Same convention as the bottom tab bar: a control for a screen
+              this phase does not build is disabled and says so, rather
+              than quietly taking the shopper somewhere else. */}
+          <button
+            type="button"
+            aria-disabled="true"
+            title="The account screen lands in a later phase"
+            onClick={(e) => e.preventDefault()}
+            className={cn(iconTargetClass, "cursor-not-allowed text-base-300 hover:bg-transparent")}
+          >
+            <span className="sr-only">Account — not available yet</span>
             <UserIcon size={19} />
-          </Link>
+          </button>
           <CartButton />
         </div>
       </div>

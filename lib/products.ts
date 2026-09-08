@@ -343,6 +343,20 @@ export function productPhotos(product: Product): ProductPhoto[] {
 }
 
 /**
+ * Whether a product has enough photography to be worth a thumbnail rail.
+ *
+ * Lives here rather than beside the gallery because the PDP is a Server
+ * Component and reads this to choose its grid template — README 03's
+ * `96px 1fr 400px` when there is a rail to put in the 96px, `1fr 400px`
+ * when there is not, rather than reserving a permanently empty column.
+ * `components/pdp/ProductGallery.tsx` is a client module, and a server
+ * page cannot call into one.
+ */
+export function hasRail(product: Product): boolean {
+  return productPhotos(product).length > 1;
+}
+
+/**
  * Autoship: a monthly repeat of the same line at 10% off.
  *
  * The rate is not stored in `products.json`; it is read off the mockups,

@@ -120,7 +120,7 @@ function Group({
 }) {
   return (
     <section className={cn("flex flex-col gap-1", divided && "border-t border-base-200 pt-5")}>
-      <h3 className="mb-1 text-label font-medium uppercase text-ink-400">{title}</h3>
+      <h3 className="mb-1 text-label font-medium uppercase text-ink-600">{title}</h3>
       {children}
     </section>
   );

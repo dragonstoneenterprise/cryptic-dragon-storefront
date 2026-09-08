@@ -38,7 +38,7 @@ export function SortControl({
           mobile mockup's `Filter | Sort` pair — spelling out the current
           value there squeezes the result count into an ellipsis. */}
       <span className="text-[13px] font-semibold leading-[18px] text-ink-900 sm:hidden">Sort</span>
-      <span className="hidden text-label uppercase text-ink-400 sm:inline" aria-hidden="true">
+      <span className="hidden text-label uppercase text-ink-600 sm:inline" aria-hidden="true">
         Sort
       </span>
       <span className="hidden text-[13px] font-semibold leading-[18px] text-ink-900 sm:inline">

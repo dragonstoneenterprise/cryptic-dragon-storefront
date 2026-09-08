@@ -5,6 +5,8 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { SearchField } from "@/components/layout/SearchField";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { HeroPanel } from "@/components/home/HeroPanel";
+import { NewsletterBlock } from "@/components/home/NewsletterBlock";
+import { PullQuoteBand } from "@/components/home/PullQuoteBand";
 import { ProductGrid } from "@/components/product/ProductGrid";
 import { filterChipClass } from "@/components/ui/FilterChip";
 import { PRODUCTS, SHELVES } from "@/lib/products";
@@ -18,10 +20,18 @@ export const metadata = {
 /**
  * 01 Home.
  *
- * TODO(phase-2): the desktop composition in the mockup also carries the
- * three-up pull-quote band with vertical hairline dividers, the about
- * paragraph and the 420px newsletter block. Those are screen composition,
- * not primitives, and belong to the Phase 2 screen build.
+ * The two breakpoints run different compositions, and the README specifies
+ * them separately:
+ *
+ *   Mobile — announcement strip, wordmark header, search field, shelf chip
+ *   row, section heading, 2-col grid, bottom tab nav. It ends at the grid.
+ *
+ *   Desktop — the same up to the grid, then "three-up pull-quote band with
+ *   vertical hairline dividers → about paragraph → newsletter block".
+ *
+ * Those last three are gated to `lg` because the mobile screen in the
+ * handoff genuinely stops at the grid; this is the spec's composition, not
+ * content hidden from small screens for want of room.
  */
 export default function HomePage() {
   return (
@@ -70,6 +80,31 @@ export default function HomePage() {
 
             <ProductGrid products={PRODUCTS} />
           </section>
+        </PageContainer>
+
+        {/* Desktop tail: pull-quote band → about paragraph → newsletter. */}
+        <PageContainer className="hidden lg:block">
+          <PullQuoteBand />
+
+          <section className="flex max-w-[62ch] flex-col gap-3 py-14">
+            <h2 className="font-display text-h2 text-ink-900">About the shop</h2>
+            <p className="text-body text-ink-600">
+              Cryptic Dragon is a dog and cat accessories shop built around six shelves — walking,
+              toys, grooming, rest, apparel and feeding — with two things on each. That is the
+              whole catalogue, and it is deliberate: a short list we can actually keep in stock,
+              describe honestly and photograph properly beats a long one nobody can navigate.
+            </p>
+            <p className="text-body text-ink-600">
+              Every product page lists what the thing is made of, what size it comes in and how to
+              wash it. Where a run has closed, the page stays up and says so rather than
+              disappearing. Prices are what they are; when something is discounted the old price
+              stays visible next to the new one.
+            </p>
+          </section>
+
+          <div className="border-t border-base-200 py-14">
+            <NewsletterBlock />
+          </div>
         </PageContainer>
       </main>
 

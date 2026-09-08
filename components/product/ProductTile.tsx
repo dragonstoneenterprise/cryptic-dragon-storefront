@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ProductPlate } from "@/components/ui/ProductPlate";
-import { isSoldOut, type Product } from "@/lib/products";
+import { isSoldOut, productHref, type Product } from "@/lib/products";
 
 /**
  * A catalogue product rendered as a ProductPlate, wrapped in a `next/link`
@@ -13,9 +13,9 @@ import { isSoldOut, type Product } from "@/lib/products";
  * Closed plates stay links: README "Sold out (\"Closed\"): plate stays
  * interactive — the PDP is still reachable — but add-to-cart is disabled."
  *
- * TODO(phase-2): the spec's product route is `/shop/[shelf]/[slug]`. This
- * still points at the existing `/product/[slug]` route because moving the
- * route tree is Phase 2's job, not this token/component pass.
+ * The destination comes from `productHref`, never from an interpolated
+ * path, so the shelf segment of the spec's `/shop/[shelf]/[slug]` route
+ * cannot drift out of sync with the product's own `shelf` field.
  */
 export function ProductTile({
   product,
@@ -26,7 +26,7 @@ export function ProductTile({
 }) {
   return (
     <Link
-      href={`/product/${product.slug}`}
+      href={productHref(product)}
       aria-label={isSoldOut(product) ? `${product.name} — Closed` : product.name}
       className="block rounded-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900"
     >

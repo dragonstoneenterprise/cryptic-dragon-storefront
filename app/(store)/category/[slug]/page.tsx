@@ -103,7 +103,7 @@ export default async function CategoryPage({
           </nav>
 
           <div className="hidden items-baseline justify-between gap-6 lg:flex">
-            <h1 className="text-h1 text-ink-900">{listing.title}</h1>
+            <h1 className="font-display text-h1 text-ink-900">{listing.title}</h1>
             <SortControl pathname={pathname} filters={filters} />
           </div>
 

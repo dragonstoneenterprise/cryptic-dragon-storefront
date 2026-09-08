@@ -26,7 +26,7 @@ const TABS = [
     href: "/category/all",
     label: "Categories",
     Icon: GridIcon,
-    match: (p: string) => p.startsWith("/category") || p.startsWith("/product"),
+    match: (p: string) => p.startsWith("/category") || p.startsWith("/shop"),
   },
   { key: "wishlist", label: "Wishlist", Icon: HeartIcon },
   { key: "account", label: "Account", Icon: UserIcon },

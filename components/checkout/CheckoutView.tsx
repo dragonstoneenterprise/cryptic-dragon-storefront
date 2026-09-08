@@ -9,7 +9,7 @@ import { ImageWell } from "@/components/ui/ImageWell";
 import { ProductPlateThumb } from "@/components/ui/ProductPlate";
 import { getProductBySlug } from "@/lib/products";
 import { TextInput } from "@/components/ui/TextInput";
-import { ChevronDownIcon, LockIcon } from "@/components/ui/icons";
+import { CardIcon, ChevronDownIcon } from "@/components/ui/icons";
 import { useCart } from "@/lib/cart/CartProvider";
 import { formatPrice } from "@/lib/format";
 import { arrivalWindow } from "@/lib/dates";
@@ -191,7 +191,7 @@ export function CheckoutView() {
   if (hydrated && lines.length === 0) {
     return (
       <div className="flex flex-col items-start gap-3 border border-base-200 bg-white px-5 py-10">
-        <h2 className="text-h2 text-ink-900">There&apos;s nothing to pay for.</h2>
+        <h2 className="font-display text-h2 text-ink-900">There&apos;s nothing to pay for.</h2>
         <p className="text-body text-ink-600">Your cart is empty — go pick something out.</p>
         <ButtonLink href="/category/all" className="mt-1">
           Start browsing
@@ -250,11 +250,6 @@ export function CheckoutView() {
           )}
         </div>
 
-        {/* TODO(phase-2): the previous spec's wallet buttons (Apple Pay /
-            Google Pay) are gone. The Cryptic Dragon spec says only
-            "Payment is a Stripe element; style it to the input token, do
-            not rebuild it" — wire the real element in Phase 2. */}
-
         <form noValidate onSubmit={onSubmit} className="flex flex-col gap-7">
           <Section title="Contact">
             <TextInput
@@ -293,12 +288,39 @@ export function CheckoutView() {
             </div>
           </Section>
 
+          {/* README 05: "Payment is a Stripe element; style it to the
+              input token, do not rebuild it."
+
+              There is no Stripe key in this build, so what ships is the
+              container the element would mount into, drawn to the input
+              token — 1px base-300, squared, white fill — with the fields
+              the element would own standing in so the form still validates
+              end to end.
+
+              The copy is deliberately flat. This is the one place on the
+              site where dressing a placeholder up would actually cost
+              someone something: a "Secured by Stripe" lockup or a padlock
+              reading as a security claim, over inputs that encrypt
+              nothing and post nowhere, is a lie about payment safety. So
+              the notice says what this is, above the fields rather than
+              under them, and the icon is a card rather than a padlock. */}
           <Section title="Payment">
-            <div className="border border-base-200 bg-white p-4">
-              <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 border border-base-300 bg-white p-4">
+              <p className="flex items-start gap-2 text-[13px] leading-[18px] text-ink-600">
+                <CardIcon size={16} className="mt-px shrink-0 text-ink-600" />
+                <span>
+                  Demo checkout. This stands in for the Stripe card element — no card is charged,
+                  and nothing entered here is transmitted or stored.{" "}
+                  <strong className="font-semibold text-ink-900">
+                    Do not enter a real card number.
+                  </strong>
+                </span>
+              </p>
+
+              <div className="flex flex-col gap-4 border-t border-base-200 pt-3">
                 <TextInput
                   label="Card number"
-                  autoComplete="cc-number"
+                  autoComplete="off"
                   inputMode="numeric"
                   placeholder="4242 4242 4242 4242"
                   {...fieldProps("cardNumber")}
@@ -306,13 +328,13 @@ export function CheckoutView() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <TextInput
                     label="Expiry"
-                    autoComplete="cc-exp"
+                    autoComplete="off"
                     placeholder="04 / 27"
                     {...fieldProps("cardExpiry")}
                   />
                   <TextInput
                     label="Security code"
-                    autoComplete="cc-csc"
+                    autoComplete="off"
                     inputMode="numeric"
                     placeholder="CVC"
                     {...fieldProps("cardCvc")}
@@ -320,10 +342,6 @@ export function CheckoutView() {
                 </div>
               </div>
             </div>
-            <p className="flex items-center gap-1.5 text-[12px] leading-4 text-ink-400">
-              <LockIcon size={13} className="text-ink-400" />
-              Placeholder for the Stripe element — nothing entered here is sent anywhere.
-            </p>
           </Section>
 
           <div className="flex flex-col gap-4 border-t border-base-200 pt-5 lg:hidden">
@@ -369,7 +387,10 @@ export function CheckoutView() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <fieldset>
-      <legend className="mb-3 text-label uppercase text-ink-400">{title}</legend>
+      {/* ink-900, not ink-400: the label token is 10px and Accessibility
+          bars ink-400 below 13px and from "a form label the user must read
+          to proceed" — a section legend is exactly that. */}
+      <legend className="mb-3 text-label font-medium uppercase text-ink-900">{title}</legend>
       <div className="flex flex-col gap-4">{children}</div>
     </fieldset>
   );

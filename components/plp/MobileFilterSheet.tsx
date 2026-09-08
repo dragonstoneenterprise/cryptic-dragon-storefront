@@ -80,7 +80,7 @@ export function MobileFilterSheet({
             className="relative flex max-h-[calc(100dvh-76px)] flex-col bg-base-0 shadow-hairline"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-base-200 px-4 py-3">
-              <h2 className="text-h2 text-ink-900">Filter</h2>
+              <h2 className="font-display text-h2 text-ink-900">Filter</h2>
               <button
                 ref={closeRef}
                 type="button"

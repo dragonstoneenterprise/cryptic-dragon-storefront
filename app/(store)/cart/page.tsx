@@ -27,7 +27,7 @@ export default function CartPage() {
               page heading below it is just the same word twice. Same split
               the PLP and checkout use. */}
           <h1 className="sr-only-cd lg:hidden">Cart</h1>
-          <h1 className="hidden text-h1 text-ink-900 lg:block">Cart</h1>
+          <h1 className="hidden font-display text-h1 text-ink-900 lg:block">Cart</h1>
           <CartPageView />
         </PageContainer>
       </main>
