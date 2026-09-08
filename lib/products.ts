@@ -316,6 +316,47 @@ export function sizeOptions(product: Product): string[] {
 /* Derived helpers                                                     */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The canonical product URL. README "Reading the columns": "Slug — the URL
+ * segment; product routes are `/shop/[shelf]/[slug]`."
+ *
+ * Every link to a PDP goes through here rather than interpolating the path
+ * inline, so the shelf segment cannot drift out of sync with the product's
+ * own `shelf` field.
+ */
+export function productHref(product: Pick<Product, "shelf" | "slug">): string {
+  return `/shop/${product.shelf}/${product.slug}`;
+}
+
+/**
+ * The photographs for a product, in gallery order.
+ *
+ * The handoff supplies exactly one shot per product, so this is a
+ * one-element array today. It exists as an array because the PDP gallery is
+ * written against a list — pager, thumbnail rail and keyboard paging all
+ * key off `length` — so the day a second shot lands in `products.json` the
+ * gallery UI turns on without a rewrite. What it deliberately does not do
+ * is pad the list out to the mockup's four thumbnails with empty wells.
+ */
+export function productPhotos(product: Product): ProductPhoto[] {
+  return [product.photo];
+}
+
+/**
+ * Autoship: a monthly repeat of the same line at 10% off.
+ *
+ * The rate is not stored in `products.json`; it is read off the mockups,
+ * which price the Cooling Mat's autoship at "$30.60" against a $34 list
+ * price on both the mobile and desktop PDP — exactly 10%. Deriving the
+ * whole catalogue from that one published pair keeps the discount a single
+ * constant rather than twelve invented numbers.
+ */
+export const AUTOSHIP_RATE = 0.1;
+
+export function autoshipPrice(product: Pick<Product, "price">): number {
+  return Math.round(product.price * (1 - AUTOSHIP_RATE) * 100) / 100;
+}
+
 const BY_SLUG = new Map(PRODUCTS.map((p) => [p.slug, p]));
 const SHELF_BY_SLUG = new Map(SHELVES.map((s) => [s.slug, s]));
 
@@ -336,6 +377,16 @@ export function productsInShelf(slug: ListingSlug): Product[] {
 
 export function isSoldOut(product: Product): boolean {
   return !product.inStock;
+}
+
+/** Carries a compare-at above the current price. Two products do. */
+export function isDiscounted(product: Product): boolean {
+  return typeof product.compareAtPrice === "number" && product.compareAtPrice > product.price;
+}
+
+/** Shipped with the "new" badge in `products.json`. Two products do. */
+export function isNewRun(product: Product): boolean {
+  return product.badge?.variant === "new";
 }
 
 /**

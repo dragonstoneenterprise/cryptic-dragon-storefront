@@ -1,4 +1,6 @@
 import {
+  isDiscounted,
+  isNewRun,
   isSoldOut,
   productsInShelf,
   SHELVES,
@@ -18,12 +20,31 @@ import { percentOff } from "./format";
  * "Interactions": "Filter/sort: updates the URL query so state is
  * shareable and back works").
  *
- * TODO(phase-2): the desktop listing's sub-filter rail in the mockups is
- * "Dogs / Cats / Dogs & cats / Autoship, each with a count". None of those
- * axes exist in `products.json` — there is no species or autoship field on
- * any of the twelve products — so this phase filters on the axes the
- * shipped data can actually answer: shelf, price band, and availability.
- * Wire the species/autoship facets when the catalogue carries them.
+ * On the sub-filter rail's axes
+ * -----------------------------
+ * The README's prose for screen 02 describes the rail as "Dogs / Cats /
+ * Dogs & cats / Autoship, each with a count". No product in
+ * `products.json` carries a species or an autoship field, so those four
+ * facets cannot be answered from the shipped catalogue without inventing
+ * per-product data — which the handoff explicitly forbids ("Product names,
+ * supplier titles, prices and spec bullets are real supplier data").
+ *
+ * The mockup itself resolves the contradiction. The PLP-desktop rail in
+ * `Cryptic Dragon.dc.html` renders three groups titled **Subcategory**,
+ * **Price** and **Status**, with the subcategory entries left as
+ * `{{ subs }}` placeholders — i.e. the drawn rail is a shelf facet, a price
+ * facet and a status facet, and the README's species list is a stale
+ * caption on top of it. So the axes below follow the drawn rail, filled
+ * with values the catalogue can actually answer:
+ *
+ *   Subcategory → shelf              (README: shelves are the taxonomy)
+ *   Price       → the mock's four bands, verbatim
+ *   Status      → Discounted / New runs / Open runs only, which is exactly
+ *                 what the mock's Status group lists
+ *
+ * Nothing here is fabricated: every facet is computed from a field that
+ * ships in `products.json`. If a species axis is ever added to the
+ * catalogue it slots in as a fourth group.
  */
 
 export type SortId = "featured" | "price-asc" | "price-desc" | "savings";
@@ -45,11 +66,39 @@ export interface PriceBucket {
   max?: number;
 }
 
-/** Bands drawn around the real catalogue, which runs $12–$58. */
+/**
+ * The four bands the PLP-desktop mock draws, verbatim. All four are
+ * populated by the real catalogue, which runs $12–$58: six products under
+ * $25, two in $25–$40, two in $40–$55, two at $55+.
+ */
 export const PRICE_BUCKETS: PriceBucket[] = [
-  { id: "under-20", label: "Under $20", min: 0, max: 20 },
-  { id: "20-40", label: "$20 – $40", min: 20, max: 40 },
-  { id: "40-plus", label: "$40+", min: 40 },
+  { id: "under-25", label: "Under $25", min: 0, max: 25 },
+  { id: "25-40", label: "$25 – $40", min: 25, max: 40 },
+  { id: "40-55", label: "$40 – $55", min: 40, max: 55 },
+  { id: "55-plus", label: "$55+", min: 55 },
+];
+
+/**
+ * The mock's Status group lists three rows: Discounted, New runs, Open runs
+ * only. Each is a predicate over a field that actually ships in
+ * `products.json`.
+ *
+ * Only the first two live here, because the three rows do not compose the
+ * same way and their own labels say so. "Discounted" and "New runs" are
+ * selections — picking both should widen the result to either, matching how
+ * the shelf and price groups already behave. "Open runs only" is an
+ * exclusion: the word *only* promises that sold-out plates leave the grid,
+ * which is the opposite of widening. So it keeps its own boolean
+ * (`inStockOnly`) and is merely rendered inside the same group.
+ *
+ * It stays off by default — README 02: "Sold-out items stay in the grid,
+ * scrimmed; they are not filtered out."
+ */
+export type StatusId = "discounted" | "new";
+
+export const STATUS_OPTIONS: { id: StatusId; label: string; test: (p: Product) => boolean }[] = [
+  { id: "discounted", label: "Discounted", test: isDiscounted },
+  { id: "new", label: "New runs", test: isNewRun },
 ];
 
 export const PAGE_SIZE = 12;
@@ -62,8 +111,11 @@ export interface Filters {
   q: string;
   shelf: string[];
   price: string[];
-  /** Hide "Closed" plates. Off by default — README is explicit that
-   * sold-out items stay in the grid, scrimmed, not filtered out. */
+  /** Selections from the Status group. OR within the group. */
+  status: StatusId[];
+  /** The Status group's "Open runs only" exclusion. Off by default —
+   * README is explicit that sold-out items stay in the grid, scrimmed,
+   * not filtered out. */
   inStockOnly: boolean;
   sort: SortId;
   page: number;
@@ -97,6 +149,9 @@ export function parseFilters(params: RawSearchParams): Filters {
     q: (first(params.q) ?? "").trim(),
     shelf: list(params.shelf).filter((id) => SHELVES.some((s) => s.slug === id)),
     price: list(params.price).filter((id) => PRICE_BUCKETS.some((b) => b.id === id)),
+    status: list(params.status).filter((id): id is StatusId =>
+      STATUS_OPTIONS.some((o) => o.id === id),
+    ),
     inStockOnly: first(params.stock) === "in",
     sort,
     page,
@@ -110,6 +165,7 @@ export function serialiseFilters(filters: Filters): string {
   if (filters.q) q.set("q", filters.q);
   if (filters.shelf.length) q.set("shelf", filters.shelf.join(","));
   if (filters.price.length) q.set("price", filters.price.join(","));
+  if (filters.status.length) q.set("status", filters.status.join(","));
   if (filters.inStockOnly) q.set("stock", "in");
   if (filters.sort !== DEFAULT_SORT) q.set("sort", filters.sort);
   if (filters.page > 1) q.set("page", String(filters.page));
@@ -136,6 +192,11 @@ function matchesPrice(product: Product, bucketIds: string[]) {
     const bucket = PRICE_BUCKETS.find((b) => b.id === id);
     return bucket ? inBucket(product, bucket) : false;
   });
+}
+
+function matchesStatus(product: Product, statusIds: StatusId[]) {
+  if (!statusIds.length) return true;
+  return statusIds.some((id) => STATUS_OPTIONS.find((o) => o.id === id)?.test(product) ?? false);
 }
 
 function sortProducts(products: Product[], sort: SortId): Product[] {
@@ -174,6 +235,7 @@ export interface ListingResult {
   facets: {
     shelf: FacetOption[];
     price: FacetOption[];
+    status: FacetOption[];
     inStock: number;
   };
 }
@@ -194,6 +256,7 @@ export function queryListing(slug: ListingSlug, filters: Filters): ListingResult
     }
     if (filters.shelf.length && !filters.shelf.includes(p.shelf)) return false;
     if (!matchesPrice(p, filters.price)) return false;
+    if (!matchesStatus(p, filters.status)) return false;
     if (filters.inStockOnly && isSoldOut(p)) return false;
     return true;
   });
@@ -218,7 +281,12 @@ export function queryListing(slug: ListingSlug, filters: Filters): ListingResult
       id: b.id,
       label: b.label,
       count: scope.filter((p) => inBucket(p, b)).length,
-    })),
+    })).filter((option) => option.count > 0),
+    status: STATUS_OPTIONS.map((o) => ({
+      id: o.id,
+      label: o.label,
+      count: scope.filter(o.test).length,
+    })).filter((option) => option.count > 0),
     inStock: scope.filter((p) => !isSoldOut(p)).length,
   };
 
@@ -226,13 +294,19 @@ export function queryListing(slug: ListingSlug, filters: Filters): ListingResult
 }
 
 export function activeFilterCount(filters: Filters) {
-  return filters.shelf.length + filters.price.length + (filters.inStockOnly ? 1 : 0);
+  return (
+    filters.shelf.length +
+    filters.price.length +
+    filters.status.length +
+    (filters.inStockOnly ? 1 : 0)
+  );
 }
 
 export const EMPTY_FILTERS: Filters = {
   q: "",
   shelf: [],
   price: [],
+  status: [],
   inStockOnly: false,
   sort: DEFAULT_SORT,
   page: 1,

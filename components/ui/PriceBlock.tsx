@@ -13,7 +13,12 @@ export interface PriceBlockProps {
    * the single lead price the README lets carry accent-600.
    */
   size?: "plate" | "lead";
-  /** Show the "Save $N" line. On by default whenever discounted. */
+  /**
+   * Show the "Save $N" line. Defaults to lead-size only: a plate already
+   * states its discount in the badge ("21% off"), and the PLP mock's grid
+   * card carries price + compare-at and nothing else, so repeating the
+   * saving under every discounted plate is the same fact three times.
+   */
   showSave?: boolean;
   className?: string;
 }
@@ -28,16 +33,32 @@ export interface PriceBlockProps {
  *
  * Compare-at always follows the current price, never precedes it, and the
  * strikethrough carries a visually-hidden "was" prefix for screen readers.
+ *
+ * On which prices get accent-600
+ * ------------------------------
+ * The colour usage rule scopes it tightly: accent-600 carries "the plate
+ * numeral, the saving amount, **the single lead price on a PDP or cart
+ * line**" — not every discounted price everywhere. A discounted price in a
+ * product grid is not a lead price, and the PLP-desktop mock confirms it,
+ * drawing the discounted grid figure in ink-900 (#18140F) with only the
+ * compare-at greyed.
+ *
+ * So the accent is gated on `size === "lead"`, not on `isDiscounted`. The
+ * "Save $N" line keeps its accent at both sizes — the rule names the saving
+ * amount separately from the lead price — but it is only ever rendered
+ * alongside a lead price in practice, since plates carry the saving in
+ * their badge instead.
  */
 export function PriceBlock({
   price,
   compareAtPrice,
   soldOut = false,
   size = "plate",
-  showSave = true,
+  showSave,
   className,
 }: PriceBlockProps) {
   const isLead = size === "lead";
+  const withSave = showSave ?? isLead;
   const priceSizeClass = isLead
     ? "text-[22px] leading-7 font-semibold"
     : "text-[13px] leading-[18px] font-normal";
@@ -54,7 +75,7 @@ export function PriceBlock({
           priceSizeClass,
           soldOut
             ? "text-ink-400 line-through"
-            : isDiscounted
+            : isDiscounted && isLead
               ? "text-accent-600"
               : "text-ink-900",
         )}
@@ -69,7 +90,7 @@ export function PriceBlock({
         </span>
       )}
 
-      {isDiscounted && showSave && (
+      {isDiscounted && withSave && (
         <span className={cn(metaSizeClass, "font-semibold tabular-nums text-accent-600")}>
           Save {formatPrice(save)}
         </span>

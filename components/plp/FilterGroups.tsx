@@ -8,18 +8,19 @@ import {
   toggleInList,
   type Filters,
   type ListingResult,
+  type StatusId,
 } from "@/lib/filters";
 import { FacetLink } from "./FacetLink";
 
 /**
  * The desktop sub-filter rail from README "02 Category listing".
  *
- * TODO(phase-2): the mockup's rail reads "Dogs / Cats / Dogs & cats /
- * Autoship, each with a count". None of those axes exist in
- * `products.json` — there is no species or autoship field on any of the
- * twelve products — so this renders the axes the shipped catalogue can
- * actually answer: shelf, price band, availability. Swap in the species
- * and autoship facets once the catalogue carries them.
+ * Three groups — Subcategory, Price, Status — which is what the PLP-desktop
+ * mock in `Cryptic Dragon.dc.html` actually draws. The README's prose for
+ * this screen names a different set ("Dogs / Cats / Dogs & cats /
+ * Autoship") that no field in `products.json` can answer; see the long note
+ * at the top of `lib/filters.ts` for why the drawn rail wins and why
+ * nothing here is invented.
  *
  * Rendered as a Server Component: every control is a link built from the
  * current filter state, so no client bundle is needed for the rail. The
@@ -40,8 +41,8 @@ export function FilterGroups({
     filtersToHref(pathname, { ...filters, ...patch, page: 1 });
 
   return (
-    <div className="flex flex-col gap-6">
-      <Group title="Shelf">
+    <div className="flex flex-col gap-5">
+      <Group title="Subcategory">
         <FacetLink
           href={href({ shelf: [] })}
           label="All shelves"
@@ -59,7 +60,7 @@ export function FilterGroups({
         ))}
       </Group>
 
-      <Group title="Price">
+      <Group title="Price" divided>
         {facets.price.map((option) => (
           <FacetLink
             key={option.id}
@@ -71,10 +72,22 @@ export function FilterGroups({
         ))}
       </Group>
 
-      <Group title="Availability">
+      <Group title="Status" divided>
+        {facets.status.map((option) => (
+          <FacetLink
+            key={option.id}
+            href={href({ status: toggleInList(filters.status, option.id as StatusId) })}
+            label={option.label}
+            count={option.count}
+            active={filters.status.includes(option.id as StatusId)}
+          />
+        ))}
+        {/* Not a selection like the two above it — the word "only" promises
+            an exclusion, so it toggles its own flag rather than widening
+            the OR. */}
         <FacetLink
           href={href({ inStockOnly: !filters.inStockOnly })}
-          label="Open run"
+          label="Open runs only"
           count={facets.inStock}
           active={filters.inStockOnly}
         />
@@ -93,9 +106,20 @@ export function FilterGroups({
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+/** The mock separates rail groups with a base-200 hairline and 20px of
+ * padding — the system's one elevation device. The first group has nothing
+ * above it to divide from. */
+function Group({
+  title,
+  divided = false,
+  children,
+}: {
+  title: string;
+  divided?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section className={cn("flex flex-col gap-1")}>
+    <section className={cn("flex flex-col gap-1", divided && "border-t border-base-200 pt-5")}>
       <h3 className="mb-1 text-label font-medium uppercase text-ink-400">{title}</h3>
       {children}
     </section>
