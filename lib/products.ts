@@ -210,7 +210,7 @@ export const PRODUCTS: Product[] = [
     stockRemaining: null,
     badge: null,
     specs: ["Recycled fill", "Removable cover", "Three sizes", "Machine washable"],
-    photo: { src: "/products/bolster-bed.png", fit: "alpha", width: 900, height: 900 },
+    photo: { src: "/products/bolster-bed.png", fit: "knockout", width: 900, height: 900 },
   },
   {
     slug: "cooling-mat",
