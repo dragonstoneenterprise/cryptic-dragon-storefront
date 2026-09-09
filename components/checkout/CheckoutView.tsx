@@ -13,7 +13,7 @@ import { ChevronDownIcon } from "@/components/ui/icons";
 import { useCart } from "@/lib/cart/CartProvider";
 import { formatPrice } from "@/lib/format";
 import { arrivalWindow } from "@/lib/dates";
-import { orderNumber, saveOrder } from "@/lib/order";
+import { orderNumber, orderNumberFromIntent, saveOrder } from "@/lib/order";
 import { cn } from "@/lib/cn";
 import { PaymentSection } from "./PaymentSection";
 import type { PaymentSectionHandle, PaymentStatus } from "./PaymentSection";
@@ -33,6 +33,9 @@ import type { PaymentSectionHandle, PaymentStatus } from "./PaymentSection";
  * `app/api/checkout/payment-intent/route.ts`. Submit validates contact and
  * shipping first, then confirms the payment, and only writes the order
  * snapshot once Stripe says the intent succeeded.
+ *
+ * The confirmation email is kicked off at the same moment and deliberately
+ * not awaited — see `requestReceipt` below.
  */
 
 type FieldId = "email" | "name" | "address1" | "address2" | "city" | "state" | "zip";
@@ -51,6 +54,44 @@ const INITIAL: Values = {
 
 /** Order matters: submit focuses the first invalid field in this order. */
 const FIELD_ORDER: FieldId[] = ["email", "name", "address1", "city", "state", "zip"];
+
+/**
+ * Ask the server to email the receipt for a payment that just succeeded, and
+ * do not wait for it.
+ *
+ * The id is the entire request: the route re-reads the order off the
+ * PaymentIntent and will not take an address, a line item or a recipient
+ * from a browser. See `app/api/checkout/send-receipt/route.ts`.
+ *
+ * Nothing here is awaited by the caller, because a receipt that is slow to
+ * send must not hold a paid shopper on the checkout screen — a failed email
+ * is not a failed order, and the confirmation is theirs either way. The
+ * navigation that follows is client-side so the request survives it, and
+ * `keepalive` covers the shopper who closes the tab first. A failure is
+ * logged rather than surfaced: there is nothing the shopper could do about
+ * it, and telling them their order might not have gone through, on the one
+ * screen that exists to say it did, would be a lie in the wrong direction.
+ */
+function requestReceipt(paymentIntentId: string) {
+  void fetch("/api/checkout/send-receipt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentIntentId }),
+    keepalive: true,
+  })
+    .then(async (res) => {
+      if (res.ok) return;
+      const data: unknown = await res.json().catch(() => null);
+      const message =
+        typeof data === "object" && data !== null && typeof (data as { error?: unknown }).error === "string"
+          ? (data as { error: string }).error
+          : `HTTP ${res.status}`;
+      console.error(`[checkout] receipt email not sent: ${message}`);
+    })
+    .catch((err) => {
+      console.error("[checkout] receipt email request failed:", err);
+    });
+}
 
 function validate(id: FieldId, value: string): string | undefined {
   const v = value.trim();
@@ -176,8 +217,19 @@ export function CheckoutView() {
     // Paid. `submitting` deliberately stays true through the redirect so the
     // button cannot be pressed a second time against a spent intent.
     setPaid(true);
+
+    // Fired here rather than from the confirmation screen: this is the one
+    // place that knows the payment just succeeded, and the receipt should
+    // not depend on the shopper reaching — or staying on — the next route.
+    if (result.paymentIntentId) requestReceipt(result.paymentIntentId);
+
     saveOrder({
-      number: orderNumber(),
+      // Derived from the intent so the number on screen is the number in the
+      // email. Falls back to a fresh one only if Stripe confirmed without
+      // handing an id back, which it does not do for an inline confirm.
+      number: result.paymentIntentId
+        ? orderNumberFromIntent(result.paymentIntentId)
+        : orderNumber(),
       email: values.email.trim(),
       lines,
       totals: { subtotal, shipping, tax, total, count },

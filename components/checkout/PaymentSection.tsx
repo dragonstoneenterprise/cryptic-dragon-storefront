@@ -71,7 +71,16 @@ export interface PaymentConfirmDetails {
   zip: string;
 }
 
-export type PaymentConfirmResult = { ok: true } | { ok: false; message: string };
+/**
+ * On success the intent's id comes back up with it. `CheckoutView` needs it
+ * for two things: it is what the order number on the confirmation screen is
+ * derived from, and it is the only thing `/api/checkout/send-receipt` will
+ * accept — that route rebuilds the whole email from the intent rather than
+ * being told what to write.
+ */
+export type PaymentConfirmResult =
+  | { ok: true; paymentIntentId?: string }
+  | { ok: false; message: string };
 
 export interface PaymentSectionHandle {
   confirm(details: PaymentConfirmDetails): Promise<PaymentConfirmResult>;
@@ -227,6 +236,21 @@ const PaymentFields = forwardRef<PaymentSectionHandle, FieldsProps>(function Pay
           // page, and the order flow below stays exactly where it was.
           redirect: "if_required",
           confirmParams: {
+            // Recorded on the intent so the receipt email can print the
+            // address the parcel is going to without being handed one by
+            // the browser. This checkout collects a single address, so it
+            // is the same one going into `billing_details` below.
+            shipping: {
+              name: details.name,
+              address: {
+                line1: details.line1,
+                line2: details.line2 || undefined,
+                city: details.city,
+                state: details.state,
+                postal_code: details.zip,
+                country: "US",
+              },
+            },
             payment_method_data: {
               billing_details: {
                 name: details.name,
@@ -257,7 +281,7 @@ const PaymentFields = forwardRef<PaymentSectionHandle, FieldsProps>(function Pay
             paymentIntent.status === "processing" ||
             paymentIntent.status === "requires_capture")
         ) {
-          return { ok: true };
+          return { ok: true, paymentIntentId: paymentIntent.id };
         }
 
         return { ok: false, message: GENERIC_DECLINE };

@@ -35,6 +35,29 @@ export function orderNumber() {
   return `BS-${Math.floor(10000 + Math.random() * 89999)}`;
 }
 
+/**
+ * The same order number, derived rather than drawn.
+ *
+ * The confirmation screen and the receipt email have to agree on what to
+ * call the order, and there is no order service to allocate a number from.
+ * Hashing the PaymentIntent id gives both sides the same answer from the one
+ * identifier they both hold, with no round trip and no shared state — and
+ * re-deriving it later (a resend, a support lookup) lands on the same
+ * number. It is a display label, not an identity: the intent id remains the
+ * only thing that identifies the payment.
+ *
+ * FNV-1a, folded into the five-digit shape `orderNumber()` produces.
+ */
+export function orderNumberFromIntent(paymentIntentId: string) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < paymentIntentId.length; i += 1) {
+    hash ^= paymentIntentId.charCodeAt(i);
+    // hash * 16777619, kept in 32 bits without overflowing the float mantissa.
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `BS-${10000 + (hash % 90000)}`;
+}
+
 export function saveOrder(order: Order) {
   try {
     window.sessionStorage.setItem(ORDER_KEY, JSON.stringify(order));
