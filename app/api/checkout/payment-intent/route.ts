@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { computeTotals } from "@/lib/cart/totals";
 import { encodeCartMetadata, parseLines, priceLines } from "@/lib/checkout/cartLines";
+import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 /**
  * POST /api/checkout/payment-intent
@@ -27,6 +28,20 @@ import { encodeCartMetadata, parseLines, priceLines } from "@/lib/checkout/cartL
  * `app/api/checkout/send-receipt` itemise a confirmation email from the
  * intent alone, without a word of the order coming from whoever asks for the
  * email. See `lib/checkout/cartLines.ts` for the encoding.
+ *
+ * **Who the order belongs to is also decided here**, and this is the only
+ * place it can be. If the request carries a valid Supabase session, the
+ * user's id is stamped onto the intent's metadata as `user_id`; if it does
+ * not, nothing is stamped and the order is a guest order. The id comes from
+ * `getAuthenticatedUser()`, which validates the session token with the Auth
+ * server — it is never read from the request body, which has no field for it.
+ *
+ * Doing it at creation rather than at record time is what makes ownership
+ * unforgeable. `app/api/checkout/record-order` reads the owner back off the
+ * Stripe object, which only this route could have written, so possessing a
+ * PaymentIntent id is not the same as being entitled to the order it names.
+ * Someone replaying another shopper's intent id learns nothing and claims
+ * nothing.
  */
 
 export const runtime = "nodejs";
@@ -73,6 +88,12 @@ export async function POST(request: Request) {
     return badRequest("That order is below the minimum we can charge.");
   }
 
+  // Who is checking out, if anyone. Null is the ordinary case — a guest —
+  // and never an error: a shopper without an account must be able to buy
+  // exactly as they could before accounts existed. This also returns null on
+  // a deployment with no Supabase env, which is the same path.
+  const buyer = await getAuthenticatedUser();
+
   const stripe = new Stripe(secretKey);
 
   try {
@@ -86,6 +107,11 @@ export async function POST(request: Request) {
       description: `Barkstash order — ${totals.count} item${totals.count === 1 ? "" : "s"}`,
       metadata: {
         source: "barkstash-storefront",
+        // The buyer, when there is one. Server-written from a validated
+        // session and read back by `record-order` as the order's owner.
+        // Omitted entirely for a guest, so `user_id` on the order row stays
+        // null and the order belongs to no account.
+        ...(buyer ? { user_id: buyer.id } : {}),
         // Identity and quantity per line, chunked across `cart`, `cart2`…
         // because Stripe caps a metadata value at 500 characters. The receipt
         // route re-prices these against the catalogue; nothing here is

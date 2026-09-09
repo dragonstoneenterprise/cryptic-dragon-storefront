@@ -13,11 +13,14 @@ import { GridIcon, HeartIcon, HomeIcon, UserIcon } from "@/components/ui/icons";
  * 74px tall including 14px of bottom padding for the home indicator, and
  * every target clears 44x44.
  *
- * Wishlist and Account are in the design's tab bar but neither screen is
- * in this phase's scope, so they render as focusable `aria-disabled`
- * controls rather than being pointed at an unrelated route — a tab that
- * silently takes you somewhere else is worse than one that says it isn't
- * built yet.
+ * Account is live and points at `/account`, which renders its own
+ * signed-in / signed-out state — so the tab is one destination rather than
+ * two that would have to know which one to be.
+ *
+ * Wishlist has no screen in this phase's scope, so it stays a focusable
+ * `aria-disabled` control rather than being pointed at an unrelated route —
+ * a tab that silently takes you somewhere else is worse than one that says
+ * it isn't built yet.
  */
 const TABS = [
   { key: "home", href: "/", label: "Home", Icon: HomeIcon, match: (p: string) => p === "/" },
@@ -29,7 +32,13 @@ const TABS = [
     match: (p: string) => p.startsWith("/category") || p.startsWith("/shop"),
   },
   { key: "wishlist", label: "Wishlist", Icon: HeartIcon },
-  { key: "account", label: "Account", Icon: UserIcon },
+  {
+    key: "account",
+    href: "/account",
+    label: "Account",
+    Icon: UserIcon,
+    match: (p: string) => p.startsWith("/account"),
+  },
 ] as const;
 
 const tabClass =

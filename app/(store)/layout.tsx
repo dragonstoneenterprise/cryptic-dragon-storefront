@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { CartProvider } from "@/lib/cart/CartProvider";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { AddedToast } from "@/components/cart/AddedToast";
@@ -19,11 +20,17 @@ import { SiteFooter } from "@/components/layout/SiteFooter";
  */
 export default function StoreLayout({ children }: { children: ReactNode }) {
   return (
-    <CartProvider>
-      {children}
-      <SiteFooter />
-      <CartDrawer />
-      <AddedToast />
-    </CartProvider>
+    // `AuthProvider` sits outside `CartProvider` because the cart reads it:
+    // who is signed in decides whether the cart persists to localStorage or
+    // to the account's row, and the cart must not hydrate before that is
+    // known. Both render no DOM, so the flex layout below is unchanged.
+    <AuthProvider>
+      <CartProvider>
+        {children}
+        <SiteFooter />
+        <CartDrawer />
+        <AddedToast />
+      </CartProvider>
+    </AuthProvider>
   );
 }

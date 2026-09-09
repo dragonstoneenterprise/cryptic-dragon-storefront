@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import Stripe from "stripe";
-import { computeTotals } from "@/lib/cart/totals";
-import type { CartTotals } from "@/lib/cart/types";
-import { decodeCartMetadata, priceLines } from "@/lib/checkout/cartLines";
-import { arrivalWindow } from "@/lib/dates";
 import { renderOrderReceipt } from "@/lib/email/orderReceipt";
-import type { Order, ShippingAddress } from "@/lib/order";
-import { orderNumberFromIntent } from "@/lib/order";
+import { SOURCE, readIntentId, rebuildOrderFromIntent } from "@/lib/checkout/intentOrder";
 
 /**
  * POST /api/checkout/send-receipt
@@ -45,17 +40,17 @@ import { orderNumberFromIntent } from "@/lib/order";
  * Both keys are read inside the handler, never at module scope, so a build
  * with neither configured still compiles and boots — the same rule
  * `app/api/checkout/payment-intent` follows.
+ *
+ * The reconstruction itself — decode the cart, re-price it, read the
+ * recipient, the address and the totals off the payment — now lives in
+ * `lib/checkout/intentOrder.ts`, because `app/api/checkout/record-order`
+ * has to produce the identical order to write to the database. One
+ * implementation, imported by both, so a customer's receipt and their order
+ * history cannot describe different purchases. The gates below are unchanged
+ * and stay here, since the two routes report them differently.
  */
 
 export const runtime = "nodejs";
-
-/** Stripe object ids are `pi_` plus base62; anything else is not worth a
- * network call. */
-const INTENT_ID = /^pi_[A-Za-z0-9]{8,255}$/;
-
-/** Written by `app/api/checkout/payment-intent`. An intent from some other
- * integration sharing this Stripe account is not ours to email about. */
-const SOURCE = "barkstash-storefront";
 
 /** Set on the intent once its receipt has gone out. */
 const SENT_MARKER = "receipt_sent_at";
@@ -72,56 +67,20 @@ function fail(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
 }
 
-function readIntentId(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) return null;
-  const id = (body as { paymentIntentId?: unknown }).paymentIntentId;
-  if (typeof id !== "string" || !INTENT_ID.test(id)) return null;
-  return id;
-}
-
 /**
- * The address the parcel is going to. `shipping` is set on the intent at
- * confirm time by `PaymentSection`; billing details are the fallback for an
- * intent confirmed before that, since this checkout collects one address and
- * sends it as both.
+ * The 422s this route can produce, phrased for the shopper-facing case.
+ * `rebuildOrderFromIntent` returns a diagnostic string; it is logged, and
+ * mapped to one of these rather than echoed, because the caller may be
+ * someone who only guessed an id.
  */
-function shippingAddressFrom(
-  intent: Stripe.PaymentIntent,
-  billing: Stripe.PaymentMethod.BillingDetails | null,
-): ShippingAddress | null {
-  const source = intent.shipping?.address ? intent.shipping : billing;
-  const address = source?.address;
-  if (!address?.line1 || !address.city || !address.state || !address.postal_code) return null;
-  return {
-    name: source?.name || billing?.name || "",
-    line1: address.line1,
-    line2: address.line2 ?? undefined,
-    city: address.city,
-    state: address.state,
-    zip: address.postal_code,
-  };
-}
-
-/** The totals recorded against the charge, if they are all present and add
- * up to what Stripe captured. */
-function storedTotals(
-  metadata: Stripe.Metadata,
-  count: number,
-  amount: number,
-): CartTotals | null {
-  const read = (key: string) => {
-    const raw = metadata[key];
-    if (typeof raw !== "string") return null;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  };
-  const subtotal = read("subtotal");
-  const shipping = read("shipping");
-  const tax = read("tax");
-  const total = read("total");
-  if (subtotal === null || shipping === null || tax === null || total === null) return null;
-  if (Math.round(total * 100) !== amount) return null;
-  return { subtotal, shipping, tax, total, count };
+function rebuildFailure(reason: string) {
+  if (reason.includes("no email")) {
+    return fail("That payment has no email address to send a receipt to.", 422);
+  }
+  if (reason.includes("no usable address")) {
+    return fail("That payment has no address to print on a receipt.", 422);
+  }
+  return fail("We couldn't rebuild that order to email it.", 422);
 }
 
 export async function POST(request: Request) {
@@ -181,56 +140,14 @@ export async function POST(request: Request) {
     return NextResponse.json(already);
   }
 
-  const decoded = decodeCartMetadata(metadata);
-  if (typeof decoded === "string") {
-    console.error(`[receipt] ${paymentIntentId}: ${decoded}`);
-    return fail("We couldn't rebuild that order to email it.", 422);
+  const rebuilt = rebuildOrderFromIntent(intent);
+  if (typeof rebuilt === "string") {
+    console.error(`[receipt] ${paymentIntentId}: ${rebuilt}`);
+    return rebuildFailure(rebuilt);
   }
 
-  // Re-priced from the catalogue, not from anything stored as money.
-  const lines = priceLines(decoded);
-  if (typeof lines === "string") {
-    console.error(`[receipt] ${paymentIntentId}: ${lines}`);
-    return fail("We couldn't rebuild that order to email it.", 422);
-  }
-
-  const paymentMethod =
-    intent.payment_method && typeof intent.payment_method !== "string"
-      ? intent.payment_method
-      : null;
-  const billing = paymentMethod?.billing_details ?? null;
-
-  // The one place the recipient can come from. Never the request body.
-  const email = intent.receipt_email ?? billing?.email ?? null;
-  if (!email) {
-    console.error(`[receipt] ${paymentIntentId}: no email on the payment`);
-    return fail("That payment has no email address to send a receipt to.", 422);
-  }
-
-  const address = shippingAddressFrom(intent, billing);
-  if (!address) {
-    console.error(`[receipt] ${paymentIntentId}: no usable address on the payment`);
-    return fail("That payment has no address to print on a receipt.", 422);
-  }
-
-  const computed = computeTotals(lines);
-  const totals = storedTotals(metadata, computed.count, intent.amount) ?? {
-    ...computed,
-    // The grand total is the one number that has to be true, and the truth is
-    // what Stripe captured — a catalogue price that moved between the charge
-    // and this email must not restate what the customer was billed.
-    total: intent.amount / 100,
-  };
-
-  const order: Order = {
-    number: orderNumberFromIntent(intent.id),
-    email,
-    lines,
-    totals,
-    address,
-    // Anchored to when the order was placed, not when this ran.
-    arriving: arrivalWindow(new Date(intent.created * 1000)),
-  };
+  const { order } = rebuilt;
+  const email = order.email;
 
   const { subject, html, text } = renderOrderReceipt(order);
 

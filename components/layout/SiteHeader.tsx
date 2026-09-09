@@ -184,19 +184,19 @@ export function SiteHeader({
 
         <div className="flex items-center gap-2">
           <SearchField defaultValue={searchValue} size="compact" className="w-[240px] xl:w-[280px]" />
-          {/* Same convention as the bottom tab bar: a control for a screen
-              this phase does not build is disabled and says so, rather
-              than quietly taking the shopper somewhere else. */}
-          <button
-            type="button"
-            aria-disabled="true"
-            title="The account screen lands in a later phase"
-            onClick={(e) => e.preventDefault()}
-            className={cn(iconTargetClass, "cursor-not-allowed text-base-300 hover:bg-transparent")}
+          {/* Live now. `/account` renders its own signed-in / signed-out
+              state, so this is one destination rather than two links that
+              would have to know which one to be — and it stays a plain
+              `Link`, keeping middle-click and open-in-new-tab.
+              (The wishlist control above is still a later phase.) */}
+          <Link
+            href="/account"
+            aria-label="Account"
+            title="Account"
+            className={iconTargetClass}
           >
-            <span className="sr-only">Account — not available yet</span>
             <UserIcon size={19} />
-          </button>
+          </Link>
           <CartButton />
         </div>
       </div>

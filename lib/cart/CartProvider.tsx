@@ -11,25 +11,46 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { computeTotals } from "./totals";
-import { lineKey, type CartLine, type CartTotals } from "./types";
+import { loadRemoteCart, saveRemoteCart } from "./remoteCart";
+import { isCartLine, lineKey, mergeCartLines, type CartLine, type CartTotals } from "./types";
 
 /**
  * Cart state. README: "the cart is the only meaningful client state",
  * "Persisted server-side, optimistically mutated client-side".
  *
- * There is no server in this build, so the persistence target is
- * localStorage. That is a deliberate stand-in, not a claim that the spec
- * was met — see the report. It buys the two properties that actually
- * matter for the screens: the cart survives a refresh, and the write is a
- * real fallible round-trip (localStorage genuinely throws under quota
- * pressure and in some private-browsing modes), which means the README's
- * "optimistic update, revert with an inline error on failure" path is live
- * code rather than a stub that can never fire.
+ * There are now two persistence targets, and which one is live depends on
+ * whether anyone is signed in:
  *
- * Implementation: React Context + useReducer, no state library. The state
- * is one array plus two booleans; a dependency would be more surface than
- * the problem has.
+ *  - **Signed out — localStorage**, exactly as before. A shopper without an
+ *    account behaves identically to how this shop behaved before accounts
+ *    existed. That is the property to protect: guest checkout is the path
+ *    that is already verified working.
+ *  - **Signed in — the `carts` table**, one row per user, so a cart follows
+ *    them between devices. RLS scopes it to its owner; see `remoteCart.ts`.
+ *
+ * The README's "optimistic update, revert with an inline error on failure"
+ * path is unchanged and now genuinely earns its keep: `commit` writes through
+ * whichever target is live and rolls the optimistic mutation back if the
+ * write fails, and a network round trip fails far more readily than a
+ * localStorage write ever did.
+ *
+ * Three rules the sync effect exists to hold:
+ *
+ *  1. **A failed remote read never destroys a cart.** "The load failed" and
+ *     "the cart is empty" are different answers, so a read error leaves the
+ *     provider on localStorage rather than writing an empty cart over a real
+ *     one.
+ *  2. **Signing out clears the device.** A synced cart belongs to the account,
+ *     not to the browser it was last seen in — leaving it behind would hand
+ *     the next person on a shared computer a list of what the last person was
+ *     buying.
+ *  3. **One user's cart never merges into another's.** The guest-cart merge
+ *     runs only on the guest -> signed-in transition, never when the signed-in
+ *     user changes.
+ *
+ * Implementation: React Context + useReducer, no state library.
  */
 
 const STORAGE_KEY = "barkstash.cart.v1";
@@ -105,19 +126,9 @@ function readStoredLines(): CartLine[] {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     // Defensive: a stored cart is user-writable data, so validate shape
-    // rather than trusting it into the render tree.
-    return parsed.filter((l): l is CartLine => {
-      if (typeof l !== "object" || l === null) return false;
-      const c = l as Partial<CartLine>;
-      return (
-        typeof c.key === "string" &&
-        typeof c.productId === "string" &&
-        typeof c.name === "string" &&
-        typeof c.qty === "number" &&
-        c.qty > 0 &&
-        typeof c.unitPrice === "number"
-      );
-    });
+    // rather than trusting it into the render tree. Shared with the remote
+    // reader, which has the same problem for the same reason.
+    return parsed.filter(isCartLine);
   } catch {
     return [];
   }
@@ -135,6 +146,23 @@ function persistLines(lines: CartLine[]): Promise<void> {
     }
   });
 }
+
+/** Used when a merged guest cart has moved to the account, and on sign-out. */
+function clearStoredLines() {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing to do and nothing worth telling the shopper.
+  }
+}
+
+/**
+ * Where writes go. Set to `remote` only after a successful read of the
+ * account's cart — a signed-in user whose cart failed to load keeps writing
+ * to localStorage rather than overwriting a row this session never managed
+ * to see.
+ */
+type SyncMode = "local" | "remote";
 
 export interface AddToCartInput {
   productId: string;
@@ -174,19 +202,94 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ name: string } | null>(null);
 
+  const { user, hydrated: authHydrated } = useAuth();
+  const userId = user?.id ?? null;
+
   // Mirror of the last-known-good lines, used to roll back a failed write.
   const committed = useRef<CartLine[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mode = useRef<SyncMode>("local");
+  /** Who the cart on screen belongs to, so a change of user is detectable. */
+  const ownerId = useRef<string | null>(null);
 
+  /**
+   * Session-start load, and the guest -> signed-in merge.
+   *
+   * Waits for auth to settle before touching anything: hydrating from
+   * localStorage first and then swapping in the account's cart a moment later
+   * would show the shopper a cart that changes under them.
+   */
   useEffect(() => {
-    const lines = readStoredLines();
-    committed.current = lines;
-    dispatch({ type: "hydrate", lines });
-  }, []);
+    if (!authHydrated) return;
+
+    let cancelled = false;
+    const previousOwner = ownerId.current;
+    ownerId.current = userId;
+
+    const settle = (lines: CartLine[], next: SyncMode) => {
+      if (cancelled) return;
+      committed.current = lines;
+      mode.current = next;
+      dispatch({ type: "hydrate", lines });
+    };
+
+    // ---- signed out ----
+    if (!userId) {
+      if (previousOwner !== null) {
+        // A real sign-out, not a first load. The cart went with the account.
+        clearStoredLines();
+        settle([], "local");
+        return;
+      }
+      settle(readStoredLines(), "local");
+      return;
+    }
+
+    // ---- signed in ----
+    // Only a guest's own cart is ever folded in. Switching accounts loads the
+    // new account's cart and nothing else.
+    const guestLines = previousOwner === null ? readStoredLines() : [];
+
+    void (async () => {
+      const remote = await loadRemoteCart();
+
+      if (remote === null) {
+        // The read failed. Stay on localStorage rather than treating "we
+        // don't know" as "empty" and writing that over the account's cart.
+        settle(guestLines, "local");
+        return;
+      }
+
+      const merged = mergeCartLines(remote, guestLines);
+      settle(merged, "remote");
+
+      if (guestLines.length > 0) {
+        // The device cart now lives in the account; leaving a copy behind
+        // would re-merge it on every future sign-in.
+        clearStoredLines();
+        try {
+          await saveRemoteCart(merged);
+        } catch (err) {
+          console.error("[cart] couldn't save the merged cart:", err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authHydrated, userId]);
 
   const commit = useCallback(async (next: CartLine[], previous: CartLine[]) => {
     try {
-      await persistLines(next);
+      // Write through whichever target this session settled on. The
+      // optimistic-then-roll-back contract is identical either way; only the
+      // odds of failing change.
+      if (mode.current === "remote") {
+        await saveRemoteCart(next);
+      } else {
+        await persistLines(next);
+      }
       committed.current = next;
     } catch {
       committed.current = previous;
