@@ -31,8 +31,8 @@ export interface Order {
 }
 
 export function orderNumber() {
-  // CD-48120 in the design copy. Five digits keeps the shape.
-  return `CD-${Math.floor(10000 + Math.random() * 89999)}`;
+  // BS-48120 in the design copy. Five digits keeps the shape.
+  return `BS-${Math.floor(10000 + Math.random() * 89999)}`;
 }
 
 export function saveOrder(order: Order) {
@@ -102,7 +102,7 @@ export function subscribeToOrder(onChange: () => void) {
 /** Shown when someone lands on /order/confirmation directly — a receipt
  * screen with nothing on it is worse than the design's sample receipt. */
 export const SAMPLE_ORDER: Order = {
-  number: "CD-48120",
+  number: "BS-48120",
   email: "sam@example.com",
   // products.json → sampleCart: "The cart, checkout and confirmation
   // mockups all use these three lines."
