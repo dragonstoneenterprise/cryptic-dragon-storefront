@@ -39,9 +39,9 @@ export async function generateMetadata({
 }) {
   const { shelf, slug } = await params;
   const product = getProductBySlug(slug);
-  if (!product || product.shelf !== shelf) return { title: "Cryptic Dragon" };
+  if (!product || product.shelf !== shelf) return { title: "Barkstash" };
   return {
-    title: `${product.name} — Cryptic Dragon`,
+    title: `${product.name} — Barkstash`,
     description: product.specs.join(" · "),
   };
 }

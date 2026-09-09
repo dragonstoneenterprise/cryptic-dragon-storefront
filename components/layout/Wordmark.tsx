@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 
 /** README "Assets": no logo file — the brand is the wordmark
- * "CRYPTIC DRAGON" set in Archivo 800 at 0.1em tracking, uppercase. */
+ * "BARKSTASH" set in Archivo 800 at 0.1em tracking, uppercase. */
 export function Wordmark({
   className,
   asLink = true,
@@ -16,7 +16,7 @@ export function Wordmark({
     className,
   );
 
-  if (!asLink) return <span className={classes}>Cryptic Dragon</span>;
+  if (!asLink) return <span className={classes}>Barkstash</span>;
 
   return (
     <Link
@@ -27,7 +27,7 @@ export function Wordmark({
         "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-900",
       )}
     >
-      Cryptic Dragon
+      Barkstash
     </Link>
   );
 }

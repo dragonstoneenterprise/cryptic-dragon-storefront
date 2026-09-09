@@ -15,7 +15,7 @@ import { CheckIcon } from "@/components/ui/icons";
 import { getProductBySlug, PRODUCTS, SHELVES } from "@/lib/products";
 
 /**
- * Component reference for the Cryptic Dragon storefront.
+ * Component reference for the Barkstash storefront.
  *
  * Every primitive in `components/ui` in every state the handoff documents,
  * on one page, so the token pass and the component pass can be reviewed
@@ -63,7 +63,7 @@ export default function ComponentsPage() {
     <main className="mx-auto flex w-full max-w-[1200px] flex-col gap-8 px-4 py-8 sm:px-6 lg:py-14">
       <header className="flex flex-col gap-2">
         <p className="text-micro-nav font-medium uppercase text-accent-600">
-          Cryptic Dragon · internal
+          Barkstash · internal
         </p>
         <h1 className="font-display text-display text-ink-900">Component reference</h1>
         <p className="max-w-[70ch] text-body text-ink-600">

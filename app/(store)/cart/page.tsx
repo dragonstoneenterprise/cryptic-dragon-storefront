@@ -2,7 +2,7 @@ import { CartPageView } from "@/components/cart/CartPageView";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
-export const metadata = { title: "Cart — Cryptic Dragon" };
+export const metadata = { title: "Cart — Barkstash" };
 
 /**
  * 04 Cart, page form.

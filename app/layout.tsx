@@ -26,7 +26,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Cryptic Dragon",
+  title: "Barkstash",
   description:
     "Six shelves of dog and cat accessories — walking, toys, grooming, rest, apparel, feeding.",
 };

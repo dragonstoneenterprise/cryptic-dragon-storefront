@@ -2,7 +2,7 @@ import { ConfirmationView } from "@/components/confirmation/ConfirmationView";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
-export const metadata = { title: "Order confirmed — Cryptic Dragon" };
+export const metadata = { title: "Order confirmed — Barkstash" };
 
 /** 06 Order confirmation. */
 export default function OrderConfirmationPage() {

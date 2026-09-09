@@ -32,7 +32,7 @@ import { lineKey, type CartLine, type CartTotals } from "./types";
  * the problem has.
  */
 
-const STORAGE_KEY = "cryptic-dragon.cart.v1";
+const STORAGE_KEY = "barkstash.cart.v1";
 
 interface CartState {
   lines: CartLine[];

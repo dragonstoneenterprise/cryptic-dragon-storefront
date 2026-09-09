@@ -10,7 +10,7 @@ import type { CartLine, CartTotals } from "./cart/types";
  * week pretending to be current.
  */
 
-const ORDER_KEY = "cryptic-dragon.lastOrder.v1";
+const ORDER_KEY = "barkstash.lastOrder.v1";
 
 export interface ShippingAddress {
   name: string;

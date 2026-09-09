@@ -12,7 +12,7 @@ import { filterChipClass } from "@/components/ui/FilterChip";
 import { PRODUCTS, SHELVES } from "@/lib/products";
 
 export const metadata = {
-  title: "Cryptic Dragon — dog and cat accessories",
+  title: "Barkstash — dog and cat accessories",
   description:
     "Six shelves of dog and cat accessories — walking, toys, grooming, rest, apparel, feeding.",
 };
@@ -89,7 +89,7 @@ export default function HomePage() {
           <section className="flex max-w-[62ch] flex-col gap-3 py-14">
             <h2 className="font-display text-h2 text-ink-900">About the shop</h2>
             <p className="text-body text-ink-600">
-              Cryptic Dragon is a dog and cat accessories shop built around six shelves — walking,
+              Barkstash is a dog and cat accessories shop built around six shelves — walking,
               toys, grooming, rest, apparel and feeding — with two things on each. That is the
               whole catalogue, and it is deliberate: a short list we can actually keep in stock,
               describe honestly and photograph properly beats a long one nobody can navigate.

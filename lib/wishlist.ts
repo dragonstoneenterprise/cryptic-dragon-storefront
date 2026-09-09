@@ -17,7 +17,7 @@
  * hence the parse memoised against the raw string.
  */
 
-const KEY = "cryptic-dragon.wishlist.v1";
+const KEY = "barkstash.wishlist.v1";
 const EMPTY: readonly string[] = Object.freeze([]);
 
 const listeners = new Set<() => void>();

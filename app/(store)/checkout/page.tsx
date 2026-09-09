@@ -2,7 +2,7 @@ import { CheckoutView } from "@/components/checkout/CheckoutView";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 
-export const metadata = { title: "Checkout — Cryptic Dragon" };
+export const metadata = { title: "Checkout — Barkstash" };
 
 /** 05 Checkout. One page, no wizard. */
 export default function CheckoutPage() {
