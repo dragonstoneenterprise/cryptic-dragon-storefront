@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
@@ -9,12 +9,14 @@ import { ImageWell } from "@/components/ui/ImageWell";
 import { ProductPlateThumb } from "@/components/ui/ProductPlate";
 import { getProductBySlug } from "@/lib/products";
 import { TextInput } from "@/components/ui/TextInput";
-import { CardIcon, ChevronDownIcon } from "@/components/ui/icons";
+import { ChevronDownIcon } from "@/components/ui/icons";
 import { useCart } from "@/lib/cart/CartProvider";
 import { formatPrice } from "@/lib/format";
 import { arrivalWindow } from "@/lib/dates";
 import { orderNumber, saveOrder } from "@/lib/order";
 import { cn } from "@/lib/cn";
+import { PaymentSection } from "./PaymentSection";
+import type { PaymentSectionHandle, PaymentStatus } from "./PaymentSection";
 
 /**
  * 05 Checkout. One page, no wizard (README is explicit about that).
@@ -24,24 +26,16 @@ import { cn } from "@/lib/cn";
  * everything and focuses the first invalid field. A field that has never
  * been blurred shows no error, so typing into an empty form is silent.
  *
- * Payment is a styled placeholder. The README says to style Stripe's
- * element to the input token rather than rebuild it; there is no Stripe
- * key in this build, so what ships is the token-styled container Stripe
- * would mount into, labelled honestly rather than wearing a "Secured by
- * Stripe" badge it hasn't earned.
+ * Payment is Stripe's Payment Element, mounted and dressed by
+ * `PaymentSection`. Card fields are no longer part of this form's state or
+ * validation: the element owns them, they never touch this origin, and the
+ * amount is the one the server computed from the cart's slugs — see
+ * `app/api/checkout/payment-intent/route.ts`. Submit validates contact and
+ * shipping first, then confirms the payment, and only writes the order
+ * snapshot once Stripe says the intent succeeded.
  */
 
-type FieldId =
-  | "email"
-  | "name"
-  | "address1"
-  | "address2"
-  | "city"
-  | "state"
-  | "zip"
-  | "cardNumber"
-  | "cardExpiry"
-  | "cardCvc";
+type FieldId = "email" | "name" | "address1" | "address2" | "city" | "state" | "zip";
 
 type Values = Record<FieldId, string>;
 
@@ -53,23 +47,10 @@ const INITIAL: Values = {
   city: "",
   state: "",
   zip: "",
-  cardNumber: "",
-  cardExpiry: "",
-  cardCvc: "",
 };
 
 /** Order matters: submit focuses the first invalid field in this order. */
-const FIELD_ORDER: FieldId[] = [
-  "email",
-  "name",
-  "address1",
-  "city",
-  "state",
-  "zip",
-  "cardNumber",
-  "cardExpiry",
-  "cardCvc",
-];
+const FIELD_ORDER: FieldId[] = ["email", "name", "address1", "city", "state", "zip"];
 
 function validate(id: FieldId, value: string): string | undefined {
   const v = value.trim();
@@ -95,20 +76,6 @@ function validate(id: FieldId, value: string): string | undefined {
       if (!v) return "Add a ZIP code.";
       if (!/^\d{5}(-\d{4})?$/.test(v)) return "US ZIP codes are five digits.";
       return undefined;
-    case "cardNumber": {
-      const digits = v.replace(/\s/g, "");
-      if (!digits) return "Add a card number.";
-      if (!/^\d{13,19}$/.test(digits)) return "A card number is 13 to 19 digits.";
-      return undefined;
-    }
-    case "cardExpiry":
-      if (!v) return "Add the expiry date.";
-      if (!/^(0[1-9]|1[0-2])\s*\/\s*\d{2}$/.test(v)) return "Use MM / YY.";
-      return undefined;
-    case "cardCvc":
-      if (!v) return "Add the security code.";
-      if (!/^\d{3,4}$/.test(v)) return "Three or four digits.";
-      return undefined;
     default:
       return undefined;
   }
@@ -123,6 +90,16 @@ export function CheckoutView() {
   const [touched, setTouched] = useState<Partial<Record<FieldId, boolean>>>({});
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const paymentRef = useRef<PaymentSectionHandle>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("loading");
+  const [paymentError, setPaymentError] = useState<string | undefined>();
+  /**
+   * Set the moment Stripe confirms. It gates a second submit against an
+   * already-spent intent, and it holds the empty-cart panel back over the
+   * frame where `clearCart()` has landed but the redirect hasn't.
+   */
+  const [paid, setPaid] = useState(false);
 
   function setValue(id: FieldId, value: string) {
     setValues((v) => ({ ...v, [id]: value }));
@@ -140,8 +117,11 @@ export function CheckoutView() {
     setErrors((e) => ({ ...e, [id]: validate(id, values[id]) }));
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting || paid) return;
+
+    setPaymentError(undefined);
 
     const nextErrors: Partial<Record<FieldId, string>> = {};
     for (const id of FIELD_ORDER) nextErrors[id] = validate(id, values[id]);
@@ -161,7 +141,41 @@ export function CheckoutView() {
       return;
     }
 
+    // Payment is the last gate, and it is a real one now: nothing below this
+    // line runs unless Stripe reports the intent succeeded.
+    const payment = paymentRef.current;
+    if (paymentStatus !== "ready" || !payment) {
+      setPaymentError(
+        paymentStatus === "unconfigured"
+          ? "Payment isn't configured on this build, so this order can't be placed."
+          : paymentStatus === "error"
+            ? "Payment isn't available right now. Refresh the page and try again."
+            : "Payment is still loading — give it a second and try again.",
+      );
+      return;
+    }
+
     setSubmitting(true);
+
+    const result = await payment.confirm({
+      email: values.email.trim(),
+      name: values.name.trim(),
+      line1: values.address1.trim(),
+      line2: values.address2.trim() || undefined,
+      city: values.city.trim(),
+      state: values.state.trim().toUpperCase(),
+      zip: values.zip.trim(),
+    });
+
+    if (!result.ok) {
+      setPaymentError(result.message);
+      setSubmitting(false);
+      return;
+    }
+
+    // Paid. `submitting` deliberately stays true through the redirect so the
+    // button cannot be pressed a second time against a spent intent.
+    setPaid(true);
     saveOrder({
       number: orderNumber(),
       email: values.email.trim(),
@@ -188,7 +202,10 @@ export function CheckoutView() {
     error: touched[id] ? errors[id] : undefined,
   });
 
-  if (hydrated && lines.length === 0) {
+  // `paid` holds this panel back for the frame between `clearCart()` and the
+  // route change — a shopper who has just been charged should not see "there's
+  // nothing to pay for" flash past on the way to their receipt.
+  if (hydrated && lines.length === 0 && !paid) {
     return (
       <div className="flex flex-col items-start gap-3 border border-base-200 bg-white px-5 py-10">
         <h2 className="font-display text-h2 text-ink-900">There&apos;s nothing to pay for.</h2>
@@ -288,70 +305,44 @@ export function CheckoutView() {
             </div>
           </Section>
 
-          {/* README 05: "Payment is a Stripe element; style it to the
-              input token, do not rebuild it."
-
-              There is no Stripe key in this build, so what ships is the
-              container the element would mount into, drawn to the input
-              token — 1px base-300, squared, white fill — with the fields
-              the element would own standing in so the form still validates
-              end to end.
-
-              The copy is deliberately flat. This is the one place on the
-              site where dressing a placeholder up would actually cost
-              someone something: a "Secured by Stripe" lockup or a padlock
-              reading as a security claim, over inputs that encrypt
-              nothing and post nowhere, is a lie about payment safety. So
-              the notice says what this is, above the fields rather than
-              under them, and the icon is a card rather than a padlock. */}
+          {/* README 05: "Payment is a Stripe element; style it to the input
+              token, do not rebuild it." That is now literally what happens —
+              see PaymentSection and stripeAppearance. Card data is entered in
+              Stripe's iframe and never enters this component's state, which
+              is why there are no card fields in `Values` above. */}
           <Section title="Payment">
-            <div className="flex flex-col gap-3 border border-base-300 bg-white p-4">
-              <p className="flex items-start gap-2 text-[13px] leading-[18px] text-ink-600">
-                <CardIcon size={16} className="mt-px shrink-0 text-ink-600" />
-                <span>
-                  Demo checkout. This stands in for the Stripe card element — no card is charged,
-                  and nothing entered here is transmitted or stored.{" "}
-                  <strong className="font-semibold text-ink-900">
-                    Do not enter a real card number.
-                  </strong>
-                </span>
-              </p>
-
-              <div className="flex flex-col gap-4 border-t border-base-200 pt-3">
-                <TextInput
-                  label="Card number"
-                  autoComplete="off"
-                  inputMode="numeric"
-                  placeholder="4242 4242 4242 4242"
-                  {...fieldProps("cardNumber")}
-                />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <TextInput
-                    label="Expiry"
-                    autoComplete="off"
-                    placeholder="04 / 27"
-                    {...fieldProps("cardExpiry")}
-                  />
-                  <TextInput
-                    label="Security code"
-                    autoComplete="off"
-                    inputMode="numeric"
-                    placeholder="CVC"
-                    {...fieldProps("cardCvc")}
-                  />
-                </div>
-              </div>
-            </div>
+            <PaymentSection
+              ref={paymentRef}
+              lines={lines}
+              expectedAmount={Math.round(total * 100)}
+              error={paymentError}
+              onStatusChange={setPaymentStatus}
+            />
           </Section>
 
+          {/* Disabled only when payment genuinely cannot happen — no key, or
+              the intent failed to create. While it is merely still loading the
+              button stays live, so pressing it surfaces any outstanding
+              shipping errors instead of silently doing nothing. */}
           <div className="flex flex-col gap-4 border-t border-base-200 pt-5 lg:hidden">
-            <Button type="submit" loading={submitting} loadingLabel="Placing order" fullWidth>
+            <Button
+              type="submit"
+              loading={submitting}
+              loadingLabel="Placing order"
+              disabled={paymentStatus === "unconfigured" || paymentStatus === "error"}
+              fullWidth
+            >
               Pay {formatPrice(total)}
             </Button>
           </div>
 
           <div className="hidden border-t border-base-200 pt-5 lg:block">
-            <Button type="submit" loading={submitting} loadingLabel="Placing order">
+            <Button
+              type="submit"
+              loading={submitting}
+              loadingLabel="Placing order"
+              disabled={paymentStatus === "unconfigured" || paymentStatus === "error"}
+            >
               Pay {formatPrice(total)}
             </Button>
           </div>
