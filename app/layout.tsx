@@ -39,6 +39,34 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-base-0 font-sans text-body text-ink-600">
         {children}
+        {/*
+          Buy Me a Coffee's widget script calls document.writeln internally,
+          which browsers block for any script that wasn't parser-inserted
+          synchronously — that rules out next/script (every strategy defers
+          or async-loads). A plain, server-rendered <script> tag lands in
+          the initial HTML as a real parser-inserted script, so the
+          document.write succeeds. Confirmed against the vendor script's
+          source before making this call.
+
+          This is necessarily a synchronous, render-blocking script — async
+          or defer would reintroduce the document.write failure, since that
+          restriction targets async-flagged scripts specifically. Disabling
+          the lint rule here rather than the widget not working at all.
+        */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script
+          type="text/javascript"
+          src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js"
+          data-name="bmc-button"
+          data-slug="wilsonlife"
+          data-color="#FFDD00"
+          data-emoji="☕"
+          data-font="Cookie"
+          data-text="Coffee keeps me going ☕"
+          data-outline-color="#000000"
+          data-font-color="#000000"
+          data-coffee-color="#ffffff"
+        />
       </body>
     </html>
   );
